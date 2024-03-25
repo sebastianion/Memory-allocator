@@ -1,0 +1,100 @@
+// Operating Systems -- 2nd Homework
+
+
+Summary of all functions implemented:
+    - void split_block(struct block_meta *block, size_t size):
+        - split the given block;
+    - void coalesce_blocks(void):
+        - merge multiple blocks;
+    - struct block_meta *find_best_block(size_t size):
+        - algorithm to find the best fitting block in the list;
+    - struct block_meta *create_block(size_t size, size_t treshold):
+        - create a new memory block;
+    - struct block_meta *prealloc(void):
+        - alloc a number of bytes on the heap when first using it;
+    - void *os_malloc_aux(size_t size, size_t treshold):
+        - auxiliary malloc function that takes a treshold value
+        as an extra parameter;
+    - void *os_malloc(size_t size):
+        - calls os_malloc_aux with MMAP_THRESHOLD as treshold value;
+    - void *os_calloc(size_t nmemb, size_t size):
+        - calls os_malloc_aux with page_size as treshold value
+        and sets every byte to 0;
+    - void *os_realloc(void *ptr, size_t size):
+        - changes the size of the memory block to "size" bytes;
+    - void os_free(void *ptr):
+        - frees memory allocated by os_malloc(), os_calloc() or os_realloc().
+
+
+Implementation details:
+    - Constant values and macros used:
+        - MMAP_THRESHOLD is the mmap treshold value, 128kB
+        - ALIGN8 alignes the value given as parameter to 8 bytes
+        - SIZEOF_STRUCT_BLOCK_META uses the ALIGN8 macro to align
+        the block_meta struct to 8 bytes;
+    
+    - Global variables:
+        - void *mem_begin is the head of the list which will be used to
+        hold every memory block allocated only using sbrk(). This is important,
+        as blocks allocated with sbrk() can be reused compared to the ones
+        allocated by mmap() calls. Even more, this implementation seems to
+        make the most sense, as sbrk() expands the heap, as opposed to mmap()
+        which allocates bigger chunks of memory without the need to be stored
+        in a contiguous manner, which is what brk()/sbrk() and our list do;
+        - struct block_meta *mem_end keeps track of the end of our memory list.
+
+    - void *os_malloc_aux(size_t size, size_t treshold):
+        - this is the function which both os_malloc() and os_calloc() use;
+        - has been created for increased modularity, as the only difference
+        between os_malloc() and os_calloc() is that os_calloc() uses a
+        different treshold value and also sets the allocated memory bytes to 0;
+        - firstly, the memory list is checked for a fitting block;
+        - after that, try to expand the last block if it is free and its
+        size is less than our needed size, and, very important, our needed
+        size is smaller than the treshold; if it is bigger than the treshold,
+        it should not be allocated with sbrk(), that means it is not going to
+        be placed in the memory list;
+        - we substract SIZEOF_STRUCT_BLOCK_META from the treshold value because
+        our needed size does not contain the size of the block_meta struct;
+        - if our memory list has not yet been initialized and our size is
+        fittig for the list, preallocate memory;
+        - if none of the above solved our malloc, create the block and update
+        the end of the list if sbrk() was used for the allocation.
+    
+    - void *os_malloc(size_t size):
+        - simply calls os_malloc_aux() with the MMAP_THRESHOLD treshold value.
+    
+    - void *os_calloc(size_t nmemb, size_t size):
+        - gets the page size information using getpagesize() and calls
+        os_malloc_aux(); after that, it uses memset to set the allocated
+        memory bytes to 0.
+    
+    - void *os_realloc(void *ptr, size_t size):
+        - get the block_meta struct from the given pointer;
+        - we try to expand the last block in the same manner as we did for
+        os_malloc_aux();
+        - if that did not work, we try to merge the next adjacent free blocks
+        until we can fit the new size; after this is finished, update the old
+        saved size of the block;
+        - check if the block needs to be split; this is the case if the
+        size of the block has become big enough to hold the new size plus
+        and extra block, if needed;
+        - at last, use malloc to allocate a new block of memory if other
+        options did not work, and copy over the old contents using memcpy.
+        
+    - void os_free(void *ptr):
+        - check the flag to see if the block given as parameter has been
+        allocated with sbrk() or mmap(); in the case of a mmap() allocated
+        block, munmap() is needed to free the memory.
+
+    - the other secondary functions have had their code explained in the
+    comments.
+
+    - I tried to achieve a maximum line size of 80 characters, that is why
+    some function parameters or instructions stretch over multple lines.
+
+
+Resources used:
+- ["Implementing malloc" slides by Michael Saelee]
+(https://moss.cs.iit.edu/cs351/slides/slides-malloc.pdf)
+- [Malloc Tutorial](https://danluu.com/malloc-tutorial/)
